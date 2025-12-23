@@ -1,1 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Impostor de Palabras</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{margin:0;font-family:system-ui;background:#0f172a;color:#e5e7eb;padding:20px}
+    h1,h2,h3{margin-top:0}
+    .screen{display:none}
+    .active{display:block}
+    .btn{background:#f59e0b;color:#000;border:none;padding:15px 30px;
+         font-size:18px;border-radius:10px;cursor:pointer;width:100%;margin:10px 0}
+    .btn.secondary{background:#1e293b;color:#e5e7eb;border:1px solid #475569}
+    .input,select{width:100%;padding:15px;border:1px solid #475569;border-radius:10px;
+           background:#1e293b;color:#e5e7eb;font-size:16px;box-sizing:border-box;margin:8px 0}
+    .codigo{display:flex;justify-content:center;font-size:26px;
+            font-weight:bold;color:#fbbf24;margin:20px 0}
+    .jugadores{list-style:none;padding:0;margin:0}
+    .jugador{padding:10px;background:#1e293b;margin:5px 0;border-radius:6px}
+    #mi-palabra{font-size:40px;text-align:center;padding:40px;
+                background:#1e293b;border-radius:15px;margin:20px 0}
+    #impostor-msg{text-align:center;margin-top:10px}
+    .app{max-width:480px;margin:0 auto}
+    small{color:#9ca3af}
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HOME -->
+  <section id="screen-home" class="screen active">
+    <h1>🎮 Impostor de Palabras</h1>
+    <p>Uno crea la sala, elige cómo se decide la palabra y los demás se unen con un código.</p>
+
+    <input id="nombre" class="input" placeholder="Tu nombre (ej: Ana)">
+    <button class="btn" onclick="irConfigurar()">Crear partida</button>
+
+    <hr style="margin:20px 0;border-color:#1e293b">
+
+    <h3>Unirse a partida</h3>
+    <input id="codigo-join" class="input" placeholder="Código de partida">
+    <button class="btn secondary" onclick="unirse()">Unirse</button>
+  </section>
+
+  <!-- CONFIGURAR PARTIDA (HOST) -->
+  <section id="screen-config" class="screen">
+    <h2>Configurar partida</h2>
+    <p><strong>Host:</strong> <span id="host-name-label"></span></p>
+
+    <h3>Número de impostores</h3>
+    <select id="num-impostores" class="input">
+      <option value="1">1 impostor</option>
+      <option value="2">2 impostores</option>
+      <option value="3">3 impostores</option>
+    </select>
+
+    <h3>Elige cómo se decide la palabra</h3>
+
+    <button class="btn" onclick="modoManual()">Escribir mi palabra</button>
+    <button class="btn" onclick="modoRandom()">Palabra aleatoria (todas las categorías)</button>
+
+    <select id="categoria-select">
+      <option value="">Elige categoría...</option>
+      <option value="animales">Animales sencillos</option>
+      <option value="cuerpo">Partes del cuerpo</option>
+      <option value="paises">Países sencillos</option>
+      <option value="utensilios">Utensilios</option>
+      <option value="colores">Colores</option>
+      <option value="deportes">Deportes</option>
+      <option value="personajes">Personajes españoles muy famosos</option>
+      <option value="comidas">Comidas</option>
+      <option value="trabajos">Trabajos</option>
+      <option value="ropa">Prendas de ropa</option>
+      <option value="clima">Fenómenos meteorológicos</option>
+      <option value="animales_magicos">Animales mágicos</option>
+      <option value="frutas">Frutas</option>
+      <option value="marcas">Marcas conocidas</option>
+    </select>
+    <button class="btn secondary" onclick="modoRandomCategoria()">Palabra aleatoria por categoría</button>
+
+    <div id="manual-word-block" style="display:none;margin-top:10px;">
+      <label>Escribe la palabra secreta (tú no podrás ser el impostor)</label>
+      <input id="palabra-manual" class="input" placeholder="Ej: PIZZA">
+      <button class="btn" onclick="confirmarConfigManual()">Confirmar y crear sala</button>
+    </div>
+
+    <p id="config-info"></p>
+    <button class="btn secondary" onclick="confirmarSalir()">Cancelar</button>
+  </section>
+
+  <!-- SALA / ESPERA -->
+  <section id="screen-sala" class="screen">
+    <h2>Sala: <span id="codigo-sala"></span></h2>
+    <p><strong>Modo:</strong> <span id="modo-label"></span></p>
+    <p><strong>Categoría:</strong> <span id="categoria-label"></span></p>
+
+    <h3>Jugadores conectados</h3>
+    <ul id="lista-jugadores" class="jugadores"></ul>
+    <small>Se necesitan al menos 3 jugadores para iniciar la ronda.</small>
+
+    <button class="btn" id="btn-iniciar" onclick="iniciarRonda()" style="margin-top:15px;">
+      Esperando a todos los jugadores
+    </button>
+    <small id="estado-espera-texto"></small>
+
+    <button class="btn secondary" onclick="confirmarSalir()">Salir</button>
+  </section>
+
+  <!-- ROL / PALABRA -->
+  <section id="screen-rol" class="screen">
+    <h2>Tu palabra secreta</h2>
+    <div id="mi-palabra"></div>
+    <p id="impostor-msg"></p>
+    <p id="modo-detalle"></p>
+
+    <button class="btn" onclick="nuevaRonda()">Nueva partida con los mismos jugadores</button>
+    <button class="btn secondary" onclick="confirmarSalir()">Salir al inicio</button>
+  </section>
+
+  <!-- MODAL NUEVA PARTIDA -->
+  <div id="modal-nueva-partida" style="display:none;position:fixed;inset:0;
+    background:rgba(15,23,42,0.9);color:#e5e7eb;align-items:center;
+    justify-content:center;z-index:50;">
+    <div style="background:#020617;padding:20px;border-radius:12px;max-width:320px;width:90%;margin:auto;">
+      <h3>¿Jugar otra partida?</h3>
+      <p>La nueva ronda empezará en <span id="contador-segundos">10</span> segundos.</p>
+      <button class="btn" onclick="aceptarNuevaPartida()">Sí, seguir jugando</button>
+      <button class="btn secondary" onclick="rechazarNuevaPartida()">Salir</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const socket = io();
+  let codigoActual = '';
+  let soyHost = false;
+  let modoActual = null;
+  let categoriaActual = null;
+  let cuentaAtrasInterval = null;
+
+  function mostrarPantalla(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function irConfigurar(){
+    const nombre = document.getElementById('nombre').value.trim();
+    if(!nombre){ alert('Escribe tu nombre'); return; }
+    soyHost = true;
+    document.getElementById('host-name-label').textContent = nombre;
+    document.getElementById('config-info').textContent = '';
+    document.getElementById('manual-word-block').style.display = 'none';
+    document.getElementById('palabra-manual').value = '';
+    document.getElementById('categoria-select').value = '';
+    mostrarPantalla('screen-config');
+  }
+
+  function modoManual(){
+    modoActual = 'manual';
+    categoriaActual = null;
+    document.getElementById('config-info').textContent =
+      'Modo manual: tú escribes la palabra y nunca podrás ser el impostor.';
+    document.getElementById('manual-word-block').style.display = 'block';
+  }
+
+  function confirmarConfigManual(){
+    const nombre = document.getElementById('nombre').value.trim();
+    const palabra = document.getElementById('palabra-manual').value.trim().toUpperCase();
+    if(!palabra){ alert('Escribe una palabra'); return; }
+    const numImp = parseInt(document.getElementById('num-impostores').value, 10);
+    socket.emit('configurar-partida', {
+      nombreHost: nombre,
+      modo: 'manual',
+      categoria: null,
+      palabraManual: palabra,
+      numImpostores: numImp
+    });
+  }
+
+  function modoRandom(){
+    const nombre = document.getElementById('nombre').value.trim();
+    const numImp = parseInt(document.getElementById('num-impostores').value, 10);
+    modoActual = 'random';
+    categoriaActual = null;
+    document.getElementById('config-info').textContent =
+      'Palabra aleatoria de todas las categorías. Tú puedes ser impostor.';
+    document.getElementById('manual-word-block').style.display = 'none';
+
+    socket.emit('configurar-partida', {
+      nombreHost: nombre,
+      modo: 'random',
+      categoria: null,
+      palabraManual: null,
+      numImpostores: numImp
+    });
+  }
+
+  function modoRandomCategoria(){
+    const nombre = document.getElementById('nombre').value.trim();
+    const cat = document.getElementById('categoria-select').value;
+    if(!cat){
+      alert('Elige una categoría');
+      return;
+    }
+    const numImp = parseInt(document.getElementById('num-impostores').value, 10);
+    modoActual = 'randomCategoria';
+    categoriaActual = cat;
+    document.getElementById('config-info').textContent =
+      'Palabra aleatoria dentro de la categoría seleccionada. Tú puedes ser impostor.';
+    document.getElementById('manual-word-block').style.display = 'none';
+
+    socket.emit('configurar-partida', {
+      nombreHost: nombre,
+      modo: 'randomCategoria',
+      categoria: cat,
+      palabraManual: null,
+      numImpostores: numImp
+    });
+  }
+
+  function unirse(){
+    const nombre = document.getElementById('nombre').value.trim();
+    const codigo = document.getElementById('codigo-join').value.trim().toUpperCase();
+    if(!nombre || !codigo){
+      alert('Escribe tu nombre y el código de sala');
+      return;
+    }
+    soyHost = false;
+    codigoActual = codigo;
+
+    document.getElementById('codigo-sala').textContent = codigo;
+    const estado = document.getElementById('estado-espera-texto');
+    if (estado) estado.textContent = 'Esperando a todos los jugadores...';
+    mostrarPantalla('screen-sala');
+
+    socket.emit('unirse-partida', { codigo, nombre });
+  }
+
+  function iniciarRonda(){
+    if(!codigoActual) return;
+    socket.emit('iniciar-ronda', codigoActual);
+  }
+
+  function nuevaRonda(){
+    if(!codigoActual) return;
+    const seguro = confirm(
+      '¿Estás seguro de que quieres terminar la ronda actual y empezar una nueva partida?'
+    );
+    if (!seguro) return;
+    socket.emit('solicitar-nueva-partida', codigoActual);
+  }
+
+  function volverHome(){
+    location.href = '/';
+  }
+
+  function confirmarSalir(){
+    const seguro = confirm(
+      '¿Seguro que quieres abandonar la partida? Perderás tu sitio en esta sala.'
+    );
+    if (!seguro) return;
+    volverHome();
+  }
+
+  function mostrarModalNuevaPartida(segundos){
+    const modal = document.getElementById('modal-nueva-partida');
+    const contador = document.getElementById('contador-segundos');
+    let tiempo = segundos;
+    contador.textContent = tiempo;
+
+    modal.style.display = 'flex';
+
+    if (cuentaAtrasInterval) clearInterval(cuentaAtrasInterval);
+    cuentaAtrasInterval = setInterval(() => {
+      tiempo--;
+      if (tiempo <= 0) {
+        clearInterval(cuentaAtrasInterval);
+      }
+      contador.textContent = tiempo;
+    }, 1000);
+  }
+
+  function ocultarModalNuevaPartida(){
+    const modal = document.getElementById('modal-nueva-partida');
+    modal.style.display = 'none';
+    if (cuentaAtrasInterval) clearInterval(cuentaAtrasInterval);
+  }
+
+  function aceptarNuevaPartida(){
+    if(!codigoActual) return;
+    socket.emit('respuesta-nueva-partida', { codigo: codigoActual, acepta: true });
+    ocultarModalNuevaPartida();
+  }
+
+  function rechazarNuevaPartida(){
+    if(!codigoActual) return;
+    socket.emit('respuesta-nueva-partida', { codigo: codigoActual, acepta: false });
+    ocultarModalNuevaPartida();
+    volverHome();
+  }
+
+  // SOCKET EVENTS
+
+  socket.on('partida-configurada', (data) => {
+    codigoActual = data.codigo;
+    modoActual = data.modo;
+    categoriaActual = data.categoria;
+
+    document.getElementById('codigo-sala').textContent = data.codigo;
+    document.getElementById('modo-label').textContent =
+      data.modo === 'manual' ? 'Palabra manual (host no es impostor)'
+      : data.modo === 'random' ? 'Palabra aleatoria (todas)'
+      : 'Palabra aleatoria por categoría';
+
+    document.getElementById('categoria-label').textContent =
+      data.categoria ? data.categoria : '—';
+
+    const estado = document.getElementById('estado-espera-texto');
+    if (estado) estado.textContent = 'Esperando a todos los jugadores...';
+
+    mostrarPantalla('screen-sala');
+  });
+
+  socket.on('jugadores-actualizados', (jugadores) => {
+    const lista = document.getElementById('lista-jugadores');
+    lista.innerHTML = '';
+    jugadores.forEach(j => {
+      const li = document.createElement('li');
+      li.className = 'jugador';
+      li.textContent = j.nombre + (j.esHost ? ' (host)' : '');
+      lista.appendChild(li);
+    });
+
+    const estado = document.getElementById('estado-espera-texto');
+    if (estado) estado.textContent = 'Esperando a todos los jugadores...';
+
+    const btn = document.getElementById('btn-iniciar');
+    if (!btn) return;
+
+    if (soyHost) {
+      btn.disabled = false;
+      btn.textContent = 'Iniciar ronda';
+    } else {
+      btn.disabled = true;
+      btn.textContent = 'Esperando a todos los jugadores';
+    }
+  });
+
+  socket.on('error-unirse', (msg) => {
+    alert(msg);
+    volverHome();
+  });
+
+  socket.on('error-ronda', (msg) => {
+    alert(msg);
+  });
+
+  socket.on('tu-rol', (data) => {
+    document.getElementById('mi-palabra').textContent = data.palabra;
+
+    if (data.impostor) {
+      document.getElementById('impostor-msg').innerHTML =
+        '🕵️ <strong>¡ERES EL IMPOSTOR!</strong> Escucha las pistas y trata de adivinar la palabra.';
+    } else {
+      document.getElementById('impostor-msg').textContent =
+        'Da pistas sin decir la palabra exacta. Intentad descubrir quién es el impostor.';
+    }
+
+    let detalle = '';
+    if (data.modo === 'manual') {
+      detalle = 'Modo: palabra escrita por el host.';
+    } else if (data.modo === 'random') {
+      detalle = 'Modo: palabra aleatoria de todas las categorías.';
+    } else if (data.modo === 'randomCategoria') {
+      detalle = 'Modo: palabra aleatoria dentro de la categoría seleccionada.';
+    }
+    if (data.categoria) {
+      detalle += ' Categoría: ' + data.categoria.toUpperCase();
+    }
+    document.getElementById('modo-detalle').textContent = detalle;
+
+    mostrarPantalla('screen-rol');
+  });
+
+  socket.on('nueva-partida-pedida', (data) => {
+    if (data.codigo !== codigoActual) return;
+    mostrarModalNuevaPartida(data.segundos);
+  });
+
+  socket.on('expulsado', (msg) => {
+    alert(msg);
+    volverHome();
+  });
+
+  socket.on('listo-para-nueva-ronda', (data) => {
+    if (data.codigo !== codigoActual) return;
+    iniciarRonda();
+  });
+
+  socket.on('estado-espera', (texto) => {
+    const el = document.getElementById('estado-espera-texto');
+    if (el) el.textContent = texto;
+  });
+</script>
+</body>
+</html>
+
 
