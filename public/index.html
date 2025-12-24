@@ -12,12 +12,14 @@
     .btn{background:#f59e0b;color:#000;border:none;padding:15px 30px;
          font-size:18px;border-radius:10px;cursor:pointer;width:100%;margin:10px 0}
     .btn.secondary{background:#1e293b;color:#e5e7eb;border:1px solid #475569}
+    .btn:disabled{background:#475569;color:#6b7280;cursor:not-allowed}
     .input,select{width:100%;padding:15px;border:1px solid #475569;border-radius:10px;
            background:#1e293b;color:#e5e7eb;font-size:16px;box-sizing:border-box;margin:8px 0}
     .codigo{display:flex;justify-content:center;font-size:26px;
             font-weight:bold;color:#fbbf24;margin:20px 0}
     .jugadores{list-style:none;padding:0;margin:0}
     .jugador{padding:10px;background:#1e293b;margin:5px 0;border-radius:6px}
+    .jugador.host{background:#f59e0b33;border-left:4px solid #f59e0b}
     #mi-palabra{font-size:40px;text-align:center;padding:40px;
                 background:#1e293b;border-radius:15px;margin:20px 0}
     #impostor-msg{text-align:center;margin-top:10px}
@@ -97,10 +99,10 @@
 
     <h3>Jugadores conectados</h3>
     <ul id="lista-jugadores" class="jugadores"></ul>
-    <small>Se necesitan al menos 3 jugadores para iniciar la ronda.</small>
+    <small id="min-jugadores-texto">Se necesitan al menos 3 jugadores para iniciar la ronda.</small>
 
-    <button class="btn" id="btn-iniciar" onclick="iniciarRonda()" style="margin-top:15px;">
-      Esperando a todos los jugadores
+    <button class="btn" id="btn-iniciar" onclick="iniciarRonda()" style="margin-top:15px;" disabled>
+      Preparando partida...
     </button>
     <small id="estado-espera-texto"></small>
 
@@ -230,12 +232,7 @@
     }
     soyHost = false;
     codigoActual = codigo;
-
-    document.getElementById('codigo-sala').textContent = codigo;
-    const estado = document.getElementById('estado-espera-texto');
-    if (estado) estado.textContent = 'Esperando a todos los jugadores...';
     mostrarPantalla('screen-sala');
-
     socket.emit('unirse-partida', { codigo, nombre });
   }
 
@@ -253,57 +250,16 @@
     socket.emit('solicitar-nueva-partida', codigoActual);
   }
 
-  function volverHome(){
-    location.href = '/';
-  }
-
   function confirmarSalir(){
     const seguro = confirm(
       '¿Seguro que quieres abandonar la partida? Perderás tu sitio en esta sala.'
     );
     if (!seguro) return;
-    volverHome();
-  }
-
-  function mostrarModalNuevaPartida(segundos){
-    const modal = document.getElementById('modal-nueva-partida');
-    const contador = document.getElementById('contador-segundos');
-    let tiempo = segundos;
-    contador.textContent = tiempo;
-
-    modal.style.display = 'flex';
-
-    if (cuentaAtrasInterval) clearInterval(cuentaAtrasInterval);
-    cuentaAtrasInterval = setInterval(() => {
-      tiempo--;
-      if (tiempo <= 0) {
-        clearInterval(cuentaAtrasInterval);
-      }
-      contador.textContent = tiempo;
-    }, 1000);
-  }
-
-  function ocultarModalNuevaPartida(){
-    const modal = document.getElementById('modal-nueva-partida');
-    modal.style.display = 'none';
-    if (cuentaAtrasInterval) clearInterval(cuentaAtrasInterval);
-  }
-
-  function aceptarNuevaPartida(){
-    if(!codigoActual) return;
-    socket.emit('respuesta-nueva-partida', { codigo: codigoActual, acepta: true });
-    ocultarModalNuevaPartida();
-  }
-
-  function rechazarNuevaPartida(){
-    if(!codigoActual) return;
-    socket.emit('respuesta-nueva-partida', { codigo: codigoActual, acepta: false });
-    ocultarModalNuevaPartida();
-    volverHome();
+    socket.disconnect();
+    location.href = '/';
   }
 
   // SOCKET EVENTS
-
   socket.on('partida-configurada', (data) => {
     codigoActual = data.codigo;
     modoActual = data.modo;
@@ -315,12 +271,7 @@
       : data.modo === 'random' ? 'Palabra aleatoria (todas)'
       : 'Palabra aleatoria por categoría';
 
-    document.getElementById('categoria-label').textContent =
-      data.categoria ? data.categoria : '—';
-
-    const estado = document.getElementById('estado-espera-texto');
-    if (estado) estado.textContent = 'Esperando a todos los jugadores...';
-
+    document.getElementById('categoria-label').textContent = data.categoria || '—';
     mostrarPantalla('screen-sala');
   });
 
@@ -329,29 +280,38 @@
     lista.innerHTML = '';
     jugadores.forEach(j => {
       const li = document.createElement('li');
-      li.className = 'jugador';
+      li.className = `jugador ${j.esHost ? 'host' : ''}`;
       li.textContent = j.nombre + (j.esHost ? ' (host)' : '');
       lista.appendChild(li);
     });
 
-    const estado = document.getElementById('estado-espera-texto');
-    if (estado) estado.textContent = 'Esperando a todos los jugadores...';
-
     const btn = document.getElementById('btn-iniciar');
-    if (!btn) return;
+    const textoEstado = document.getElementById('estado-espera-texto');
+    const minJugadoresTexto = document.getElementById('min-jugadores-texto');
 
     if (soyHost) {
-      btn.disabled = false;
-      btn.textContent = 'Iniciar ronda';
+      if (jugadores.length >= 3) {
+        btn.disabled = false;
+        btn.textContent = '🚀 Iniciar partida';
+        if (textoEstado) textoEstado.textContent = `${jugadores.length}/10 jugadores`;
+        if (minJugadoresTexto) minJugadoresTexto.textContent = '¡Listo para iniciar!';
+      } else {
+        btn.disabled = true;
+        btn.textContent = `Necesitas ${3-jugadores.length} jugador${3-jugadores.length>1?'es':''} más`;
+        if (textoEstado) textoEstado.textContent = `${jugadores.length} jugadores`;
+        if (minJugadoresTexto) minJugadoresTexto.textContent = 'Mínimo 3 jugadores';
+      }
     } else {
       btn.disabled = true;
-      btn.textContent = 'Esperando a todos los jugadores';
+      btn.textContent = 'Esperando al host...';
+      if (textoEstado) textoEstado.textContent = `${jugadores.length} jugadores conectados`;
+      if (minJugadoresTexto) minJugadoresTexto.textContent = 'Se necesitan al menos 3 jugadores.';
     }
   });
 
   socket.on('error-unirse', (msg) => {
     alert(msg);
-    volverHome();
+    location.href = '/';
   });
 
   socket.on('error-ronda', (msg) => {
@@ -360,7 +320,6 @@
 
   socket.on('tu-rol', (data) => {
     document.getElementById('mi-palabra').textContent = data.palabra;
-
     if (data.impostor) {
       document.getElementById('impostor-msg').innerHTML =
         '🕵️ <strong>¡ERES EL IMPOSTOR!</strong> Escucha las pistas y trata de adivinar la palabra.';
@@ -370,16 +329,10 @@
     }
 
     let detalle = '';
-    if (data.modo === 'manual') {
-      detalle = 'Modo: palabra escrita por el host.';
-    } else if (data.modo === 'random') {
-      detalle = 'Modo: palabra aleatoria de todas las categorías.';
-    } else if (data.modo === 'randomCategoria') {
-      detalle = 'Modo: palabra aleatoria dentro de la categoría seleccionada.';
-    }
-    if (data.categoria) {
-      detalle += ' Categoría: ' + data.categoria.toUpperCase();
-    }
+    if (data.modo === 'manual') detalle = 'Modo: palabra escrita por el host.';
+    else if (data.modo === 'random') detalle = 'Modo: palabra aleatoria de todas las categorías.';
+    else if (data.modo === 'randomCategoria') detalle = 'Modo: palabra aleatoria dentro de la categoría seleccionada.';
+    if (data.categoria) detalle += ' Categoría: ' + data.categoria.toUpperCase();
     document.getElementById('modo-detalle').textContent = detalle;
 
     mostrarPantalla('screen-rol');
@@ -392,7 +345,7 @@
 
   socket.on('expulsado', (msg) => {
     alert(msg);
-    volverHome();
+    location.href = '/';
   });
 
   socket.on('listo-para-nueva-ronda', (data) => {
@@ -407,5 +360,7 @@
 </script>
 </body>
 </html>
+
+
 
 
