@@ -1,3 +1,5 @@
+Package.json (Actualizado para Fly.io ✅)
+json
 {
   "name": "impostor-palabras",
   "version": "1.0.0",
@@ -16,9 +18,7 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "keywords": ["socket.io", "multiplayer", "game"],
-  "author": "Tu nombre",
-  "license": "MIT"
+  }
 }
+
 
